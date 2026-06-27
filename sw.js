@@ -1,4 +1,4 @@
-const CACHE = 'dl1rv-v2.1';
+const CACHE = 'dl2-v1.0';
 const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
