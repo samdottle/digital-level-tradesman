@@ -1,4 +1,31 @@
 <!DOCTYPE html>
+<!--
+  Digital Level 2 — Web App
+  Version: 1.4
+  Date:    2026-07-15
+
+  New in v1.4 (changes from v1.3):
+    - Fixed: pressing "Tare to Current Position" while connected never
+      actually settled the display at 0.00° -- it would flash 0.00 for one
+      frame, then jump to the NEGATIVE of the pre-tare reading and stay
+      there (and stay wrong, including the LEVEL badge, from then on).
+      Root cause: onData() applied a persistent app-side correction
+      (localPitchOffsetRef) on top of the firmware's own offset, and the
+      Tare handler added the same delta to BOTH the app's local offset AND
+      the firmware's offset (BLE "TAR:" command, which itself uses ADD
+      semantics -- see the .ino firmware). Once the firmware's next
+      telemetry packet arrived already corrected, the app subtracted the
+      same correction a second time, inverting the error instead of
+      canceling it. Fix: removed the app-side localPitchOffsetRef/
+      localRollOffsetRef entirely; the firmware is now the single source of
+      truth for the tare offset once TAR: is sent, matching how
+      Calibration (CAL:) already worked. The Tare button still zeroes the
+      display instantly (optimistic UI); the next real telemetry packet
+      now correctly confirms 0.00 instead of overshooting.
+    - Not affected by this bug: the unit's own physical Tare button
+      (standalone/unpaired) and reconnecting afterward -- that path only
+      ever used the firmware's offset directly.
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +34,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Digital Level 2">
-<meta name="description" content="Professional digital level for carpentry. MPU-6050 + ESP32 BLE. Real-time pitch and roll, animated bubble vial, slope calculator.">
+<meta name="description" content="Precision MPU-6050 digital level with BLE. Real-time pitch and roll, animated bubble vial, slope calculator.">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>Digital Level 2</title>
@@ -185,10 +212,6 @@ function App() {
   // Readings
   const [pitchDeg, setPitchDeg]           = useState(0);
   const [rollDeg, setRollDeg]             = useState(0);
-  // Local app-side tare offset -- applied instantly on display, independent of
-  // firmware's TAR ADD semantics. Guarantees Tare always zeroes the display immediately.
-  const localPitchOffsetRef = React.useRef(0);
-  const localRollOffsetRef  = React.useRef(0);
 
   // Two independent demo modes:
   // simActive = auto-sweep sine wave (play button) - bubble moves automatically
@@ -308,8 +331,8 @@ function App() {
       emaPitchRef.current = EMA_ALPHA * rp + (1 - EMA_ALPHA) * emaPitchRef.current;
       emaRollRef.current  = EMA_ALPHA * rr + (1 - EMA_ALPHA) * emaRollRef.current;
     }
-    const correctedPitch = emaPitchRef.current - localPitchOffsetRef.current;
-    const correctedRoll  = emaRollRef.current  - localRollOffsetRef.current;
+    const correctedPitch = emaPitchRef.current;
+    const correctedRoll  = emaRollRef.current;
     setPitchDeg(parseFloat(correctedPitch.toFixed(2)));
     setRollDeg(parseFloat(correctedRoll.toFixed(2)));
   }, []);
@@ -317,7 +340,6 @@ function App() {
   const onDisconnected = useCallback(() => {
     setIsConnected(false); setIsLevel(false); wasLevelRef.current = false;
     txCharRef.current = null; emaPitchRef.current = null; emaRollRef.current = null;
-    localPitchOffsetRef.current = 0; localRollOffsetRef.current = 0;
     toast('Disconnected from device');
   }, [toast]);
 
@@ -510,7 +532,7 @@ function App() {
             ),
             h('div', null,
               h('h1', { className: 'text-sm font-semibold text-white leading-none' }, 'Digital Level 2'),
-              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'MPU-6050 · ESP32 · BLE · v1.0')
+              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'MPU-6050 · ESP32 · BLE · v1.4')
             )
           ),
           // Connection indicator
@@ -735,15 +757,14 @@ function App() {
         h('button', {
           onClick: () => {
             if (isConnected) {
-              // Instantly zero the display: add current displayed reading to local offset.
-              // This guarantees Tare always shows 0.00 immediately, regardless of
-              // firmware round-trip timing or the firmware's own ADD-based offset.
-              localPitchOffsetRef.current += pitchDeg;
-              localRollOffsetRef.current  += rollDeg;
+              // v1.4: send the delta to the firmware (single source of truth for the
+              // offset, also keeps standalone/no-BLE mode correctly tared) and show an
+              // optimistic 0.00 for this frame. Do NOT also keep a local app-side
+              // offset -- the firmware's next telemetry packet already reflects the
+              // correction, so subtracting it again here would apply it twice.
+              sendCommand(`TAR:${pitchDeg.toFixed(2)},${rollDeg.toFixed(2)}`);
               setPitchDeg(0);
               setRollDeg(0);
-              // Also tell firmware so standalone (no-BLE) mode stays correctly tared
-              sendCommand(`TAR:${pitchDeg.toFixed(2)},${rollDeg.toFixed(2)}`);
               toast('Tared — display zeroed');
             } else {
               toast('Not connected — tare not applied');
@@ -851,7 +872,7 @@ function App() {
         h('div', { className:'text-center text-xs text-slate-600 pt-2 pb-4 space-y-1' },
           h('p', null, 'Arduino Nano ESP32 + MPU-6050 · BLE Nordic UART'),
           h('p', null, 'Advertise as "Level" in your Arduino sketch'),
-          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level 2 · v1.0')
+          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level 2 · v1.4')
         )
       )
     ),
