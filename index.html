@@ -1,6 +1,24 @@
 <!DOCTYPE html>
 <!--
-  Digital Level 2 — Web App
+  Digital Level Tradesman — Web App
+  Version: 1.6
+  Date:    2026-07-18
+
+  New in v1.6 (changes from v1.5):
+    - Removed the "MPU-6050 · ESP32 · BLE · vX.X" subtitle from the app
+      header. Also caught and fixed in this pass: the v1.5 rename had
+      updated the title ("Digital Level 2" -> "Digital Level Tradesman")
+      but missed the version number in this same subtitle line, which
+      still read "v1.4" -- moot now that the whole line is gone, but
+      noting it since it was a real, if minor, leftover bug.
+
+  Version: 1.5
+  Date:    2026-07-15
+
+  New in v1.5 (changes from v1.4):
+    - Rename only, no functional changes: "Digital Level 2" -> "Digital
+      Level Tradesman", per family-wide naming revamp.
+
   Version: 1.4
   Date:    2026-07-15
 
@@ -33,11 +51,11 @@
 <meta name="theme-color" content="#0a0f1e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Digital Level 2">
-<meta name="description" content="Precision MPU-6050 digital level with BLE. Real-time pitch and roll, animated bubble vial, slope calculator.">
+<meta name="apple-mobile-web-app-title" content="Digital Level Tradesman">
+<meta name="description" content="Everyday MPU-6050 digital level with BLE. Real-time pitch and roll, animated bubble vial, slope calculator.">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<title>Digital Level 2</title>
+<title>Digital Level Tradesman</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/framer-motion/10.16.4/framer-motion.js"></script>
@@ -531,8 +549,7 @@ function App() {
               h('div', { className: 'absolute top-1/2 left-1/2 w-1.5 h-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400' })
             ),
             h('div', null,
-              h('h1', { className: 'text-sm font-semibold text-white leading-none' }, 'Digital Level 2'),
-              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'MPU-6050 · ESP32 · BLE · v1.4')
+              h('h1', { className: 'text-sm font-semibold text-white leading-none' }, 'Digital Level Tradesman')
             )
           ),
           // Connection indicator
@@ -872,7 +889,7 @@ function App() {
         h('div', { className:'text-center text-xs text-slate-600 pt-2 pb-4 space-y-1' },
           h('p', null, 'Arduino Nano ESP32 + MPU-6050 · BLE Nordic UART'),
           h('p', null, 'Advertise as "Level" in your Arduino sketch'),
-          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level 2 · v1.4')
+          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · v1.6')
         )
       )
     ),

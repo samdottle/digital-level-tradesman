@@ -1,7 +1,7 @@
 {
-  "name": "Digital Level 2",
-  "short_name": "DL2",
-  "description": "Precision MPU-6050 digital level with BLE connectivity. Real-time pitch and roll, bubble vial display, slope calculator.",
+  "name": "Digital Level Tradesman",
+  "short_name": "DL Tradesman",
+  "description": "Everyday MPU-6050 digital level with BLE connectivity. Real-time pitch and roll, bubble vial display, slope calculator.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0a0f1e",
