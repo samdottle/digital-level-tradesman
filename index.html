@@ -1,8 +1,33 @@
 <!DOCTYPE html>
 <!--
   Digital Level Tradesman — Web App
-  Version: 1.6
-  Date:    2026-07-18
+  Version: 1.7
+  Date:    2026-07-19
+
+  New in v1.7 (changes from v1.6): one confirmed bug fixed in the Tare
+  function, ported from Digital Level Tradesman 4 Point v1.1 (see that
+  product's changelog and its DL_Tradesman4Point_Tare_Bug_Handoff.md for
+  the full derivation and debugging history):
+
+    - EMA smoothing accumulator (emaPitchRef.current/emaRollRef.current)
+      was never reset when Tare was tapped -- only the displayed value
+      was. The accumulator kept holding its stale pre-tare value, so the
+      display would drift back off-center over the following packets
+      instead of staying at 0. Fixed: the accumulator now resets to 0
+      alongside the displayed state.
+
+  Also fixed: sendCommand() previously had a silent catch(e){} -- any BLE
+  write failure produced zero indication. Now returns true/false for
+  success/failure and surfaces a toast on any caught write error.
+
+  This product does NOT need the roll sign-convention fix that Tradesman
+  4 Point and Pro 4 Point required -- confirmed this product never
+  negates roll on receipt (no minus sign on parseFloat(m[2])), so that
+  bug does not apply here. The accumulator fix has not been independently
+  re-verified against real Tradesman (standard) hardware as of this
+  version -- ported directly from a fix confirmed working on Tradesman 4
+  Point, which shares this exact mechanism, but worth testing on this
+  product's own hardware before treating it as equally proven.
 
   New in v1.6 (changes from v1.5):
     - Removed the "MPU-6050 · ESP32 · BLE · vX.X" subtitle from the app
@@ -335,9 +360,17 @@ function App() {
 
   // ── BLE ──
   const sendCommand = useCallback(async (cmd) => {
-    if (!txCharRef.current) return;
-    try { await txCharRef.current.writeValue(new TextEncoder().encode(cmd + '\n')); } catch(e) {}
-  }, []);
+    if (!txCharRef.current) return false;
+    try {
+      await txCharRef.current.writeValue(new TextEncoder().encode(cmd + '\n'));
+      return true;
+    } catch(err) {
+      // Surfaces write failures (dropped write, GATT busy, characteristic
+      // not ready) instead of silently swallowing them.
+      toast(`Command failed: ${cmd.split(':')[0]} (${err.message||err})`, 'error');
+      return false;
+    }
+  }, [toast]);
 
   const onData = useCallback((e) => {
     const val = new TextDecoder().decode(e.target.value).trim();
@@ -772,20 +805,27 @@ function App() {
 
         // ── Tare ──
         h('button', {
-          onClick: () => {
-            if (isConnected) {
-              // v1.4: send the delta to the firmware (single source of truth for the
-              // offset, also keeps standalone/no-BLE mode correctly tared) and show an
-              // optimistic 0.00 for this frame. Do NOT also keep a local app-side
-              // offset -- the firmware's next telemetry packet already reflects the
-              // correction, so subtracting it again here would apply it twice.
-              sendCommand(`TAR:${pitchDeg.toFixed(2)},${rollDeg.toFixed(2)}`);
-              setPitchDeg(0);
-              setRollDeg(0);
-              toast('Tared — display zeroed');
-            } else {
-              toast('Not connected — tare not applied');
-            }
+          onClick: async () => {
+            if (!isConnected) { toast('Not connected — tare not applied'); return; }
+            // Sends a single TAR: command (additive, single source of
+            // truth for the offset). Confirmed fix, ported from Digital
+            // Level Tradesman 4 Point v1.1: the EMA accumulator
+            // (emaPitchRef/emaRollRef) is now reset alongside the
+            // displayed state, not just the display -- without this, the
+            // next real packet blends the firmware's now-corrected
+            // reading into a stale accumulator value and the display
+            // drifts back off-center instead of staying at 0. This
+            // product does not negate roll on receipt (confirmed: no
+            // minus sign on parseFloat(m[2]) below), so the roll
+            // sign-convention bug found and fixed in the 4-Point products
+            // does not apply here.
+            const ok = await sendCommand(`TAR:${pitchDeg.toFixed(2)},${rollDeg.toFixed(2)}`);
+            if (!ok) { toast('Tare failed — command not sent, try again', 'error'); return; }
+            emaPitchRef.current = 0;
+            emaRollRef.current = 0;
+            setPitchDeg(0);
+            setRollDeg(0);
+            toast('Tared — display zeroed', 'success');
           },
           className: 'w-full py-3 rounded-xl border text-sm font-medium transition-all bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
         }, 'Tare to Current Position'),
@@ -889,7 +929,7 @@ function App() {
         h('div', { className:'text-center text-xs text-slate-600 pt-2 pb-4 space-y-1' },
           h('p', null, 'Arduino Nano ESP32 + MPU-6050 · BLE Nordic UART'),
           h('p', null, 'Advertise as "Level" in your Arduino sketch'),
-          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · v1.6')
+          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · v1.7')
         )
       )
     ),
