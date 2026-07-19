@@ -1,8 +1,18 @@
 <!DOCTYPE html>
 <!--
   Digital Level Tradesman — Web App
-  Version: 1.7
+  Version: 1.8
   Date:    2026-07-19
+
+  New in v1.8 (changes from v1.7):
+    - Added a version-only subtitle back under the header title ("v1.8"),
+      so the running version is visible at a glance without scrolling to
+      the footer. The v1.6 removal was of the chip/sensor detail
+      ("MPU-6050 · ESP32 · BLE"), not the version number specifically --
+      this restores just the version, without the chip/sensor info.
+    - Removed the "Arduino Nano ESP32 + MPU-6050 · BLE Nordic UART" line
+      from the footer -- the v1.6 chip/sensor removal only ever covered
+      the header; this line in the footer was missed at the time.
 
   New in v1.7 (changes from v1.6): one confirmed bug fixed in the Tare
   function, ported from Digital Level Tradesman 4 Point v1.1 (see that
@@ -582,7 +592,8 @@ function App() {
               h('div', { className: 'absolute top-1/2 left-1/2 w-1.5 h-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400' })
             ),
             h('div', null,
-              h('h1', { className: 'text-sm font-semibold text-white leading-none' }, 'Digital Level Tradesman')
+              h('h1', { className: 'text-sm font-semibold text-white leading-none' }, 'Digital Level Tradesman'),
+              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'v1.8')
             )
           ),
           // Connection indicator
@@ -927,9 +938,8 @@ function App() {
 
         // ── Footer ──
         h('div', { className:'text-center text-xs text-slate-600 pt-2 pb-4 space-y-1' },
-          h('p', null, 'Arduino Nano ESP32 + MPU-6050 · BLE Nordic UART'),
           h('p', null, 'Advertise as "Level" in your Arduino sketch'),
-          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · v1.7')
+          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · v1.8')
         )
       )
     ),
