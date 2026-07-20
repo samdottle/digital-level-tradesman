@@ -1,8 +1,16 @@
 <!DOCTYPE html>
 <!--
   Digital Level Tradesman — Web App
-  Version: 1.8
+  Version: 1.9
   Date:    2026-07-19
+
+  New in v1.9 (changes from v1.8):
+    - Added a vertical line through the center of the bubble, reaching
+      the bubble's own top and bottom edge with no gap. Previously the
+      bubble was a plain filled shape with nothing marking its own
+      center, so lining it up against the tube's fixed center tick meant
+      eyeballing the middle of a rounded shape against a thin line.
+      Now it's a precise line-to-line match.
 
   New in v1.8 (changes from v1.7):
     - Added a version-only subtitle back under the header title ("v1.8"),
@@ -593,7 +601,7 @@ function App() {
             ),
             h('div', null,
               h('h1', { className: 'text-sm font-semibold text-white leading-none' }, 'Digital Level Tradesman'),
-              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'v1.8')
+              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'v1.9')
             )
           ),
           // Connection indicator
@@ -710,7 +718,14 @@ function App() {
                   },
                   onMouseDown: (e) => { e.preventDefault(); onDragStart(e.clientX); },
                   onTouchStart: (e) => { if (e.touches[0]) onDragStart(e.touches[0].clientX); }
-                })
+                },
+                  // Vertical line through the bubble's own center, reaching
+                  // its full top and bottom edge (no gap) -- makes it a
+                  // precise line-to-line match against the tube's fixed
+                  // center tick, instead of eyeballing the center of a
+                  // rounded shape against a thin line.
+                  h('div', { className: 'absolute inset-y-0 left-1/2 w-px bg-white/80 -translate-x-1/2 pointer-events-none' })
+                )
               ),
               // Right cap
               h('div', { className: 'flex-shrink-0 w-4 h-10 rounded-r-full border-2 border-l-0 border-slate-500 bg-slate-800/60' })
@@ -939,7 +954,7 @@ function App() {
         // ── Footer ──
         h('div', { className:'text-center text-xs text-slate-600 pt-2 pb-4 space-y-1' },
           h('p', null, 'Advertise as "Level" in your Arduino sketch'),
-          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · v1.8')
+          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · v1.9')
         )
       )
     ),
