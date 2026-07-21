@@ -1,8 +1,55 @@
 <!DOCTYPE html>
 <!--
   Digital Level Tradesman — Web App
-  Version: 1.9
+  Version: 1.10 (EXPLORATORY -- for evaluation, not confirmed for shipping)
   Date:    2026-07-19
+
+  Background: this hardware has no magnetometer, so it cannot sense yaw
+  (rotation around the vertical axis). Confirmed the resulting bug is not
+  new -- traced back through the firmware and app source to the original
+  DL2 release (v1.4/v2.4) and found byte-for-byte identical, unchanged
+  through every subsequent rename and version bump. Explored several
+  automatic-detection approaches (gyro integration, sign-change
+  inference) and concluded none were reliable enough to trust -- each had
+  concrete false-positive/false-negative scenarios, not just abstract
+  uncertainty.
+
+  New in v1.10 (changes from v1.9): a manual FRONT-orientation control,
+  tied to the physical FRONT label already printed on the unit -- the
+  same reference the 4-point products already rely on and are confirmed
+  to work correctly with. The operator answers once, which side FRONT is
+  on; persisted in localStorage since a given operator likely places the
+  unit the same way every time.
+
+    - Correction applied upstream, at the point raw pitch is parsed in
+      onData -- not just at the final bubble position -- so display,
+      Tare, and Calibration all agree with each other and with the LEVEL
+      threshold check, rather than only fixing what's on screen and
+      leaving everything else computed from the raw, orientation-
+      dependent value.
+    - Tare and Calibration both negate the value back before sending to
+      the firmware, undoing the app-side correction -- otherwise this
+      would reintroduce the exact bug found and fixed on Tradesman 4
+      Point's roll axis: an already-corrected value sent into TAR:/CAL:
+      computes the wrong new offset, and the error compounds rather than
+      resolving.
+    - LEVEL threshold check needed no change -- it already compares
+      Math.abs(pitchDeg), which is sign-independent by construction.
+    - Demo modes (Bubble Demo, Auto-sweep) needed no change -- neither
+      uses real sensor data.
+    - Uses a parallel ref (frontOrientationRef) alongside the React state
+      so onData -- a stable useCallback with an empty dependency array --
+      can read the current value without needing to be recreated, which
+      would otherwise require re-registering the BLE characteristic
+      listener. Same pattern already used for emaPitchRef/emaRollRef in
+      this file.
+
+  NOT YET DONE: an equivalent phone-rotation-based approach (physically
+  rotating the viewing device 180 deg to match FRONT, relying on portrait
+  auto-rotate typically not extending to upside-down) was also discussed
+  as a zero-UI alternative, but not built or tested here -- its
+  reliability depends on OS auto-rotate behavior that varies by device
+  and hasn't been verified on real hardware.
 
   New in v1.9 (changes from v1.8):
     - Added a vertical line through the center of the bubble, reaching
@@ -270,6 +317,38 @@ function App() {
   const [isConnected, setIsConnected]     = useState(false);
   const [deviceName, setDeviceName]       = useState('');
 
+  // v1.10 EXPLORATORY: FRONT orientation. This hardware has no
+  // magnetometer, so it physically cannot sense which way it's been
+  // yawed -- the same real tilt reads with opposite sign depending on
+  // which way FRONT happens to be facing. Rather than guess, ask the
+  // operator once, tied to the physical FRONT label already on the unit
+  // (the same reference the 4-point products already rely on and are
+  // confirmed to work correctly with). Persisted in localStorage since a
+  // given operator very likely places the unit the same way every time.
+  //
+  // React state drives the UI (button highlighting); a parallel ref lets
+  // onData (a stable useCallback with an empty dependency array, so it's
+  // never recreated) read the CURRENT value without needing to be
+  // recreated itself -- same pattern already used for emaPitchRef/
+  // emaRollRef in this same file. Recreating onData would mean the BLE
+  // characteristic listener needs re-registering too, which is avoidable
+  // risk this doesn't need to take on.
+  const [frontOrientation, setFrontOrientationState] = useState(() => {
+    try { return localStorage.getItem('dlTradesmanFrontOrientation') || 'left'; }
+    catch(e) { return 'left'; }
+  });
+  const frontOrientationRef = useRef(frontOrientation);
+  const setFrontOrientation = useCallback((val) => {
+    frontOrientationRef.current = val;
+    setFrontOrientationState(val);
+    try { localStorage.setItem('dlTradesmanFrontOrientation', val); } catch(e) {}
+    // Reset the accumulator so the next real packet starts fresh under
+    // the new sign convention, instead of blending into a value computed
+    // under the old one -- same defensive pattern Tare uses.
+    emaPitchRef.current = null;
+    emaRollRef.current = null;
+  }, []);
+
   // Readings
   const [pitchDeg, setPitchDeg]           = useState(0);
   const [rollDeg, setRollDeg]             = useState(0);
@@ -394,7 +473,13 @@ function App() {
     const val = new TextDecoder().decode(e.target.value).trim();
     const m = val.match(/P:([-\d.]+),R:([-\d.]+)/);
     if (!m) return;
-    const rp = parseFloat(m[1]), rr = parseFloat(m[2]);
+    const rawP = parseFloat(m[1]), rr = parseFloat(m[2]);
+    // v1.10 EXPLORATORY: apply the FRONT-orientation correction here,
+    // upstream of the smoothing accumulator, so display, Tare, and the
+    // LEVEL threshold check all agree -- rather than only correcting the
+    // final on-screen bubble position and leaving everything else
+    // computed from the raw, orientation-dependent value.
+    const rp = frontOrientationRef.current === 'right' ? -rawP : rawP;
     if (emaPitchRef.current === null) { emaPitchRef.current = rp; emaRollRef.current = rr; }
     else {
       emaPitchRef.current = EMA_ALPHA * rp + (1 - EMA_ALPHA) * emaPitchRef.current;
@@ -552,7 +637,12 @@ function App() {
     const or_ = (p1.roll  + p2.roll)  / 2;
     setCalOffsets({ pitch: op, roll: or_ });
     setCalPhase(6);
-    sendCommand(`CAL:${op.toFixed(2)},${or_.toFixed(2)}`);
+    // v1.10 EXPLORATORY: op is averaged from pitchRef, which tracks the
+    // already FRONT-orientation-corrected pitchDeg (see onData) -- same
+    // exposure as Tare had. Negate back before sending, so the firmware
+    // receives its own uncorrected convention, not the app's display one.
+    const opForFirmware = frontOrientation === 'right' ? -op : op;
+    sendCommand(`CAL:${opForFirmware.toFixed(2)},${or_.toFixed(2)}`);
   };
 
   const resetCalibration = () => {
@@ -601,7 +691,7 @@ function App() {
             ),
             h('div', null,
               h('h1', { className: 'text-sm font-semibold text-white leading-none' }, 'Digital Level Tradesman'),
-              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'v1.9')
+              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'v1.10 EXP')
             )
           ),
           // Connection indicator
@@ -654,6 +744,27 @@ function App() {
                 isConnected ? 'Disconnect' : isConnecting ? 'Connecting...' : 'Connect'
               )
             )
+          )
+        ),
+
+        // ── FRONT Orientation (v1.10 EXPLORATORY) ──
+        // Ties the fix to the same physical FRONT label already printed
+        // on the unit, since the 4-point products already rely on that
+        // exact reference and are confirmed to work correctly with it.
+        h('div', { className: 'rounded-2xl border p-4 space-y-2 bg-slate-900/60 border-slate-800' },
+          h('p', { className: 'text-xs font-medium text-slate-500 uppercase tracking-widest' }, 'Front Orientation'),
+          h('p', { className: 'text-xs text-slate-500' },
+            'Look down at the unit\u2019s FRONT label. Which side is it on?'
+          ),
+          h('div', { className: 'grid grid-cols-2 gap-2 pt-1' },
+            h('button', {
+              onClick: () => setFrontOrientation('left'),
+              className: `py-2.5 rounded-xl border text-sm font-medium transition-all ${frontOrientation === 'left' ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-600'}`
+            }, 'FRONT \u2014 My Left'),
+            h('button', {
+              onClick: () => setFrontOrientation('right'),
+              className: `py-2.5 rounded-xl border text-sm font-medium transition-all ${frontOrientation === 'right' ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-600'}`
+            }, 'FRONT \u2014 My Right')
           )
         ),
 
@@ -840,12 +951,17 @@ function App() {
             // displayed state, not just the display -- without this, the
             // next real packet blends the firmware's now-corrected
             // reading into a stale accumulator value and the display
-            // drifts back off-center instead of staying at 0. This
-            // product does not negate roll on receipt (confirmed: no
-            // minus sign on parseFloat(m[2]) below), so the roll
-            // sign-convention bug found and fixed in the 4-Point products
-            // does not apply here.
-            const ok = await sendCommand(`TAR:${pitchDeg.toFixed(2)},${rollDeg.toFixed(2)}`);
+            // drifts back off-center instead of staying at 0.
+            // v1.10 EXPLORATORY: pitchDeg may now be sign-corrected for
+            // FRONT orientation (see onData). The firmware knows nothing
+            // about that app-side convention -- sending the corrected
+            // value straight into TAR: would compute the wrong new offset
+            // (the exact bug found and fixed on Tradesman 4 Point's roll
+            // axis: error doesn't shrink, it doubles each tap). Negate it
+            // back here specifically, so the firmware receives its own,
+            // uncorrected convention.
+            const pitchForFirmware = frontOrientation === 'right' ? -pitchDeg : pitchDeg;
+            const ok = await sendCommand(`TAR:${pitchForFirmware.toFixed(2)},${rollDeg.toFixed(2)}`);
             if (!ok) { toast('Tare failed — command not sent, try again', 'error'); return; }
             emaPitchRef.current = 0;
             emaRollRef.current = 0;
@@ -954,7 +1070,7 @@ function App() {
         // ── Footer ──
         h('div', { className:'text-center text-xs text-slate-600 pt-2 pb-4 space-y-1' },
           h('p', null, 'Advertise as "Level" in your Arduino sketch'),
-          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · v1.9')
+          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · v1.10-exploratory')
         )
       )
     ),
