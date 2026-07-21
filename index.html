@@ -1,54 +1,53 @@
 <!DOCTYPE html>
 <!--
   Digital Level Tradesman — Web App
-  Version: 1.11 (EXPLORATORY -- for evaluation, not confirmed for shipping)
-  Date:    2026-07-20
+  TEST 1.0 (evaluation build -- not a numbered version, not for shipping)
+  Built from v1.9 (the last non-experimental baseline). Date: 2026-07-20
 
-  Alternative to v1.10's manual toggle, proposed by a separate AI
-  (ChatGPT) after reviewing the orientation bug handoff document, and
-  built here for side-by-side evaluation -- NOT combined with v1.10;
-  built from v1.9 (the last non-experimental baseline) directly.
+  Implements the FRONT/REAR bubble-mimic guidelines confirmed correct
+  through worked examples covering both orientations from the original
+  bug report:
 
-  Core idea: stop trying to map pitch onto operator-relative left/right
-  at all -- that's the one thing this sensor genuinely cannot do without
-  a magnetometer. Instead express both the measurement and the
-  instruction in the same body-fixed terms the sensor actually measures:
-  "RAISE FRONT" / "RAISE REAR" / "LEVEL", matched by the operator against
-  the physical FRONT label already printed on the unit. Correct
-  regardless of yaw rotation, because nothing here claims to know which
-  way the operator is standing.
+    Orientation A: FRONT on operator's left, operator raises that end
+    (raising FRONT). FRONT becomes the physically high end. Text shows
+    RAISE REAR (correct -- REAR is low). Bubble sits near the FRONT
+    label -- the end that's actually high. Bubble moves TOWARD the
+    raised end, matching a real level.
 
-  Real advantage over v1.10 identified while comparing the two: the
-  manual toggle has a failure mode this doesn't -- if the operator
-  rotates the unit mid-session and forgets to update the toggle, v1.10's
-  display goes wrong again, silently, with no way to detect it. This
-  approach has no stored state to go stale; the operator checks the
-  FRONT/REAR label against the physical marking fresh, every time.
+    Orientation B: unit rotated 180 deg, FRONT now on operator's right.
+    Operator raises the SAME physical end as before (still under the
+    same hand) -- which, because the bar rotated, is now REAR. REAR
+    becomes the physically high end. Text shows RAISE FRONT (correct --
+    FRONT is low). Bubble sits near the REAR label -- again the end
+    that's actually high.
 
-  Honest limitation, stated the same way it was in the proposal: this
-  does not make FRONT irrelevant to the operator -- it makes FRONT the
-  explicit, required reference. That inverts the original design goal
-  rather than achieving it; accepted here as the honest tradeoff for what
-  this sensor can actually deliver, not hidden.
+  In both cases the operator never needs to track their own left/right --
+  only match the FRONT sticker on the physical unit to the FRONT label on
+  screen. This works because the guidance text, AND the bubble's own
+  screen position, are BOTH driven by the same body-fixed pitch signal,
+  which is invariant under yaw rotation.
 
-  New in v1.11 (changes from v1.9):
-    - Added POSITIVE_PITCH_MEANS_FRONT_HIGH, a single isolated constant
-      controlling FRONT/REAR label polarity. NOT VERIFIED AGAINST REAL
-      HARDWARE -- determining which physical direction corresponds to
-      which pitch sign requires seeing the PCB's actual mounting
-      orientation inside the housing, which isn't visible from software.
-      If "RAISE FRONT" appears backwards on a real unit, flip this one
-      boolean; nothing else in this feature needs to change.
-    - Added a prominent RAISE FRONT / RAISE REAR / LEVEL text callout
-      below the main pitch readout.
-    - Added FRONT / REAR text labels above the vial ends (screen-layout
-      choice only -- FRONT drawn on the left of the graphic, REAR on the
-      right -- doesn't correspond to anything physical itself; only the
-      LABEL TEXT needs to be matched against the unit).
-    - Confirmed by diff against v1.9: zero changes to Tare, Calibration,
-      pitch computation, EMA smoothing, or any BLE handling. This
-      feature only adds display logic on top of the existing, unmodified
-      pitchDeg value.
+  Corrects a defect found in an earlier build (v1.11) of this same idea:
+  that build's screen layout (FRONT drawn on the left) caused the bubble
+  to move AWAY from the raised end rather than toward it -- backwards
+  relative to a real bubble level, independent of the yaw-orientation
+  question entirely. This build swaps which side FRONT is drawn on
+  (right, not left) so bubble motion agrees with the text. Confirmed by
+  tracing both orientations above with real numbers before considering
+  this correct, not assumed from the fix alone.
+
+  NOT VERIFIED AGAINST REAL HARDWARE: POSITIVE_PITCH_MEANS_FRONT_HIGH
+  (near the top of this file) determines which physical direction
+  produces which pitch sign, and that depends on the PCB's actual
+  mounting orientation inside the housing, which isn't visible from
+  software. If FRONT/REAR guidance and bubble motion appear backwards
+  together on a real unit, flip that one boolean -- text and bubble will
+  flip together, staying consistent with each other either way.
+
+  Confirmed by diff against v1.9: zero changes to Tare, Calibration,
+  pitch computation, EMA smoothing, or any BLE handling. This is purely a
+  display-layer addition on top of the existing, unmodified pitchDeg
+  value.
 
   New in v1.9 (changes from v1.8):
     - Added a vertical line through the center of the bubble, reaching
@@ -202,16 +201,19 @@ const CHAR_TX_UUID  = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 const CHAR_RX_UUID  = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 const EMA_ALPHA     = 0.05;
 const THRESHOLD_OPTIONS = [0.01, 0.05, 0.10];
-// v1.11 EXPLORATORY: FRONT/REAR guidance instead of implied left/right.
+// TEST 1.0: FRONT/REAR guidance, mimicking a real mechanical bubble level.
 // Pitch (atan2(ayf,azf), body-fixed) is always consistent relative to the
-// physical FRONT label, regardless of yaw rotation -- see this product's
-// orientation bug handoff document for the full reasoning. This ONE
-// constant is the only thing standing between correct and backwards
-// FRONT/REAR labeling. NOT VERIFIED AGAINST REAL HARDWARE -- I have no
-// way to see the PCB's physical mounting orientation inside the housing
-// from software alone. If "RAISE FRONT" appears while REAR is actually
-// the low/raised end on a real unit, flip this single boolean; nothing
-// else in this feature needs to change.
+// physical FRONT label, regardless of yaw rotation -- both the guidance
+// text AND the bubble's own visual motion are driven by this same signal,
+// so they stay in agreement with each other no matter which way the unit
+// is rotated. See this product's orientation bug handoff document for
+// the full reasoning.
+//   NOT VERIFIED AGAINST REAL HARDWARE -- I have no way to see the PCB's
+// physical mounting orientation inside the housing from software alone.
+// If "RAISE FRONT" and the bubble's motion appear backwards together on
+// a real unit, flip this single boolean; nothing else needs to change,
+// and text + bubble will flip together, staying consistent with each
+// other either way.
 const POSITIVE_PITCH_MEANS_FRONT_HIGH = true;
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -644,11 +646,12 @@ function App() {
   const riseIn = Math.tan(Math.abs(displayPitch) * Math.PI / 180) * 120;
   const riseDir = displayPitch > 0 ? 'rise' : displayPitch < 0 ? 'drop' : 'level';
 
-  // v1.11 EXPLORATORY: FRONT/REAR guidance. Correct regardless of which
-  // way the unit is yawed, because both the measurement (pitch) and the
-  // instruction (FRONT/REAR) are expressed in the same body-fixed terms
-  // -- see POSITIVE_PITCH_MEANS_FRONT_HIGH above for the one thing that
-  // needs hardware verification.
+  // TEST 1.0: FRONT/REAR guidance. Correct regardless of which way the
+  // unit is yawed, because the measurement (pitch), the instruction
+  // (FRONT/REAR text), and the bubble's own screen position are ALL
+  // driven by this same body-fixed signal -- see
+  // POSITIVE_PITCH_MEANS_FRONT_HIGH above for the one thing that needs
+  // hardware verification.
   const frontIsHigh = POSITIVE_PITCH_MEANS_FRONT_HIGH ? displayPitch > 0 : displayPitch < 0;
   const withinLevel = Math.abs(displayPitch) <= levelThreshold;
   const guidance = withinLevel ? 'LEVEL' : frontIsHigh ? 'RAISE REAR' : 'RAISE FRONT';
@@ -667,7 +670,7 @@ function App() {
             ),
             h('div', null,
               h('h1', { className: 'text-sm font-semibold text-white leading-none' }, 'Digital Level Tradesman'),
-              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'v1.11 EXP')
+              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'TEST 1.0')
             )
           ),
           // Connection indicator
@@ -744,11 +747,10 @@ function App() {
             `${sign(displayPitch)}${displayPitch.toFixed(2)}°`
           ),
 
-          // v1.11 EXPLORATORY: FRONT/REAR guidance -- correct regardless
-          // of which way the unit is yawed on the surface (see the
-          // constant near the top of this file). Match this label to the
-          // physical FRONT marking on the unit; the instruction below it
-          // is unambiguous either way.
+          // TEST 1.0: FRONT/REAR guidance -- correct regardless of which
+          // way the unit is yawed on the surface. Match this label to the
+          // physical FRONT marking on the unit; the instruction is
+          // unambiguous either way.
           h('p', {
             className: `text-2xl font-bold tracking-wide ${withinLevel ? 'text-emerald-400' : 'text-amber-400'}`
           }, guidance),
@@ -763,13 +765,16 @@ function App() {
 
           // Bubble vial
           h('div', { className: 'pt-4 pb-1 px-1' },
-            // v1.11 EXPLORATORY: FRONT/REAR labels above the vial ends.
-            // Purely a screen-layout choice (FRONT drawn on the left of
-            // this graphic, REAR on the right) -- doesn't correspond to
-            // anything physical. The operator matches whichever label
-            // says FRONT to the physical FRONT marking on the unit.
+            // TEST 1.0: REAR on screen-left, FRONT on screen-right.
+            // barPct maps positive pitch (FRONT high, per the constant
+            // above) to a HIGHER percentage -- i.e. screen-right -- so
+            // FRONT must be drawn on the right for the bubble to move
+            // TOWARD the raised end, matching a real mechanical level.
+            // Purely a screen-layout choice; doesn't correspond to
+            // anything physical by itself. The operator matches whichever
+            // label says FRONT to the physical FRONT marking on the unit.
             h('div', { className: 'flex justify-between text-xs font-semibold text-slate-400 mb-1 px-1' },
-              h('span', null, 'FRONT'), h('span', null, 'REAR')
+              h('span', null, 'REAR'), h('span', null, 'FRONT')
             ),
             h('div', { className: 'flex items-center gap-1' },
               // Left cap
@@ -1037,7 +1042,7 @@ function App() {
         // ── Footer ──
         h('div', { className:'text-center text-xs text-slate-600 pt-2 pb-4 space-y-1' },
           h('p', null, 'Advertise as "Level" in your Arduino sketch'),
-          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · v1.11-exploratory')
+          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · TEST 1.0')
         )
       )
     ),

@@ -1,54 +1,53 @@
 # Digital Level Tradesman — Web App + Firmware
 
-**Version 1.11 — EXPLORATORY, for evaluation, not confirmed for shipping**
-2026-07-20 · MPU-6050 · Arduino Nano ESP32 · BLE Nordic UART
+**TEST 1.0** — evaluation build, not a numbered version, not for shipping
+Built from v1.9 (the last non-experimental baseline). 2026-07-20 · MPU-6050 · Arduino Nano ESP32 · BLE Nordic UART
 
-## Alternative to v1.10, proposed by ChatGPT
-Built from `v1.9` directly (not combined with v1.10's manual toggle), for
-side-by-side comparison.
+## What this implements
+The FRONT/REAR bubble-mimic guidelines, confirmed correct through worked
+examples covering both orientations from the original bug report:
 
-## Core idea
-Stop trying to map pitch onto operator-relative left/right at all — the
-one thing this sensor genuinely cannot do without a magnetometer.
-Instead, express both the measurement and the instruction in the same
-body-fixed terms the sensor actually measures: **RAISE FRONT / RAISE
-REAR / LEVEL**, matched by the operator against the physical FRONT label
-already printed on the unit. Correct regardless of yaw rotation, because
-nothing here claims to know which way the operator is standing.
+**Orientation A**: FRONT on operator's left, operator raises that end
+(raising FRONT). FRONT becomes the physically high end. Text shows
+**RAISE REAR** (correct — REAR is low). Bubble sits near the FRONT
+label — the end that's actually high. Bubble moves *toward* the raised
+end, matching a real level.
 
-## Real advantage over v1.10, identified while comparing the two
-The manual toggle has a failure mode this doesn't: if the operator
-rotates the unit mid-session and forgets to update the toggle, v1.10's
-display goes wrong again, silently, with no way to detect it. This
-approach has **no stored state to go stale** — the operator checks the
-FRONT/REAR label against the physical marking fresh, every time.
+**Orientation B**: unit rotated 180°, FRONT now on operator's right.
+Operator raises the *same physical end* as before (still under the same
+hand) — which, because the bar rotated, is now REAR. REAR becomes the
+physically high end. Text shows **RAISE FRONT** (correct — FRONT is
+low). Bubble sits near the REAR label — again the end that's actually
+high.
 
-## Honest limitation
-This does **not** make FRONT irrelevant to the operator — it makes FRONT
-the explicit, required reference. That inverts the original design goal
-rather than achieving it. Accepted here as the honest tradeoff for what
-this sensor can actually deliver, not hidden.
+In both cases the operator never needs to track their own left/right —
+only match the FRONT sticker on the physical unit to the FRONT label on
+screen. This works because the guidance text, and the bubble's own screen
+position, are both driven by the same body-fixed pitch signal, which is
+invariant under yaw rotation.
 
-## What changed
-- Added `POSITIVE_PITCH_MEANS_FRONT_HIGH`, a single isolated constant
-  controlling FRONT/REAR label polarity. **Not verified against real
-  hardware** — determining which physical direction corresponds to which
-  pitch sign requires seeing the PCB's actual mounting orientation inside
-  the housing, which isn't visible from software. If "RAISE FRONT"
-  appears backwards on a real unit, flip this one boolean; nothing else
-  needs to change.
-- Added a prominent RAISE FRONT / RAISE REAR / LEVEL callout below the
-  main pitch readout.
-- Added FRONT / REAR text labels above the vial ends (screen-layout
-  choice only — doesn't correspond to anything physical itself; only the
-  label text needs to be matched against the unit).
+## Corrects a defect found in an earlier evaluation build (v1.11)
+That build's screen layout (FRONT drawn on the left) caused the bubble to
+move *away* from the raised end rather than toward it — backwards
+relative to a real bubble level, independent of the yaw-orientation
+question entirely. This build swaps which side FRONT is drawn (right,
+not left) so bubble motion agrees with the text. Confirmed by tracing
+both orientations above with real numbers before considering this
+correct, not assumed from the fix alone.
+
+## Not verified against real hardware
+`POSITIVE_PITCH_MEANS_FRONT_HIGH` (near the top of `index.html`)
+determines which physical direction produces which pitch sign, and that
+depends on the PCB's actual mounting orientation inside the housing,
+which isn't visible from software. If FRONT/REAR guidance and bubble
+motion appear backwards together on a real unit, flip that one boolean —
+text and bubble will flip together, staying consistent with each other
+either way.
 
 ## Confirmed by diff against v1.9
 Zero changes to Tare, Calibration, pitch computation, EMA smoothing, or
-any BLE handling. This feature only adds display logic on top of the
+any BLE handling. This is purely a display-layer addition on top of the
 existing, unmodified `pitchDeg` value.
 
 ## Status
-Working prototype for evaluation, not a locked/confirmed version — and
-specifically needs the sign-convention constant checked against real
-hardware before shipping.
+Evaluation build. Not a shipping candidate until tested on real hardware.
