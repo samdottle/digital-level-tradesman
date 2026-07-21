@@ -1,50 +1,54 @@
 # Digital Level Tradesman — Web App + Firmware
 
-**Version 1.10 — EXPLORATORY, for evaluation, not confirmed for shipping**
-2026-07-19 · MPU-6050 · Arduino Nano ESP32 · BLE Nordic UART
+**Version 1.11 — EXPLORATORY, for evaluation, not confirmed for shipping**
+2026-07-20 · MPU-6050 · Arduino Nano ESP32 · BLE Nordic UART
 
-## Background
-This hardware has no magnetometer, so it cannot sense yaw (rotation
-around the vertical axis). Confirmed this is not a new bug — traced back
-through the firmware and app source to the original DL2 release
-(v1.4/v2.4) and found byte-for-byte identical, unchanged through every
-subsequent rename and version bump. Several automatic-detection
-approaches (gyro integration, sign-change inference) were explored and
-rejected as unreliable — each had concrete false-positive/false-negative
-scenarios, not just abstract uncertainty.
+## Alternative to v1.10, proposed by ChatGPT
+Built from `v1.9` directly (not combined with v1.10's manual toggle), for
+side-by-side comparison.
 
-## What this version adds
-A manual FRONT-orientation control, tied to the physical FRONT label
-already printed on the unit — the same reference the 4-point products
-already rely on and are confirmed to work correctly with. The operator
-answers once, which side FRONT is on; persisted in `localStorage` since a
-given operator likely places the unit the same way every time.
+## Core idea
+Stop trying to map pitch onto operator-relative left/right at all — the
+one thing this sensor genuinely cannot do without a magnetometer.
+Instead, express both the measurement and the instruction in the same
+body-fixed terms the sensor actually measures: **RAISE FRONT / RAISE
+REAR / LEVEL**, matched by the operator against the physical FRONT label
+already printed on the unit. Correct regardless of yaw rotation, because
+nothing here claims to know which way the operator is standing.
 
-## Implementation notes
-- **Correction applied upstream**, at the point raw pitch is parsed —
-  not just at the final bubble position — so display, Tare, and
-  Calibration all agree with each other and with the LEVEL threshold
-  check.
-- **Tare and Calibration both negate the value back** before sending to
-  the firmware, undoing the app-side correction. Without this, it would
-  reintroduce the exact bug found and fixed on Tradesman 4 Point's roll
-  axis — an already-corrected value sent into `TAR:`/`CAL:` computes the
-  wrong new offset, and the error compounds rather than resolving.
-- LEVEL threshold check needed no change — already sign-independent
-  (`Math.abs`).
-- Demo modes needed no change — neither uses real sensor data.
-- Uses a parallel ref alongside the React state so the BLE data handler
-  (a stable callback) can read the current value without needing to be
-  recreated, which would otherwise require re-registering the BLE
-  listener.
+## Real advantage over v1.10, identified while comparing the two
+The manual toggle has a failure mode this doesn't: if the operator
+rotates the unit mid-session and forgets to update the toggle, v1.10's
+display goes wrong again, silently, with no way to detect it. This
+approach has **no stored state to go stale** — the operator checks the
+FRONT/REAR label against the physical marking fresh, every time.
 
-## Not yet done
-An equivalent phone-rotation-based approach (physically rotating the
-viewing device 180° to match FRONT) was also discussed as a zero-UI
-alternative, but not built or tested here — its reliability depends on
-OS auto-rotate behavior that varies by device and hasn't been verified
-on real hardware.
+## Honest limitation
+This does **not** make FRONT irrelevant to the operator — it makes FRONT
+the explicit, required reference. That inverts the original design goal
+rather than achieving it. Accepted here as the honest tradeoff for what
+this sensor can actually deliver, not hidden.
+
+## What changed
+- Added `POSITIVE_PITCH_MEANS_FRONT_HIGH`, a single isolated constant
+  controlling FRONT/REAR label polarity. **Not verified against real
+  hardware** — determining which physical direction corresponds to which
+  pitch sign requires seeing the PCB's actual mounting orientation inside
+  the housing, which isn't visible from software. If "RAISE FRONT"
+  appears backwards on a real unit, flip this one boolean; nothing else
+  needs to change.
+- Added a prominent RAISE FRONT / RAISE REAR / LEVEL callout below the
+  main pitch readout.
+- Added FRONT / REAR text labels above the vial ends (screen-layout
+  choice only — doesn't correspond to anything physical itself; only the
+  label text needs to be matched against the unit).
+
+## Confirmed by diff against v1.9
+Zero changes to Tare, Calibration, pitch computation, EMA smoothing, or
+any BLE handling. This feature only adds display logic on top of the
+existing, unmodified `pitchDeg` value.
 
 ## Status
-This is a working prototype for evaluation, not a locked/confirmed
-version. Please test before treating it as a shipping candidate.
+Working prototype for evaluation, not a locked/confirmed version — and
+specifically needs the sign-convention constant checked against real
+hardware before shipping.
