@@ -1,12 +1,22 @@
 <!DOCTYPE html>
 <!--
   Digital Level Tradesman — Web App
-  TEST 1.0 (evaluation build -- not a numbered version, not for shipping)
-  Built from v1.9 (the last non-experimental baseline). Date: 2026-07-20
+  PROTO 1.0 (locked down for shipment)
+  Built from v1.9 (the last non-experimental baseline), via TEST 1.0
+  (evaluation build, confirmed working). Date: 2026-07-21
 
-  Implements the FRONT/REAR bubble-mimic guidelines confirmed correct
-  through worked examples covering both orientations from the original
-  bug report:
+  Implements FRONT/REAR guidance in place of implied operator-relative
+  left/right, because the MPU-6050 sensor has no magnetometer and
+  physically cannot sense yaw (rotation around the vertical axis) --
+  meaning no software fix can ever make the display correct for BOTH
+  physical orientations if it depends on the operator's own left/right.
+  Full background, including everything ruled out before arriving here,
+  is preserved in this product's orientation bug handoff document
+  (DLT_Orientation_Bug_Handoff.md) -- not repeated here in full, to keep
+  this changelog focused on what's true about the shipped code.
+
+  Confirmed correct through worked examples covering both orientations
+  from the original bug report:
 
     Orientation A: FRONT on operator's left, operator raises that end
     (raising FRONT). FRONT becomes the physically high end. Text shows
@@ -27,14 +37,12 @@
   screen position, are BOTH driven by the same body-fixed pitch signal,
   which is invariant under yaw rotation.
 
-  Corrects a defect found in an earlier build (v1.11) of this same idea:
-  that build's screen layout (FRONT drawn on the left) caused the bubble
-  to move AWAY from the raised end rather than toward it -- backwards
-  relative to a real bubble level, independent of the yaw-orientation
-  question entirely. This build swaps which side FRONT is drawn on
-  (right, not left) so bubble motion agrees with the text. Confirmed by
-  tracing both orientations above with real numbers before considering
-  this correct, not assumed from the fix alone.
+  An earlier evaluation build of this same idea (v1.11) had the bubble
+  moving AWAY from the raised end instead of toward it -- a screen-layout
+  defect, independent of the yaw-orientation question entirely. Caught
+  during review, corrected in TEST 1.0 (FRONT moved to the right side of
+  the display), and confirmed here by tracing both orientations above
+  with real numbers before treating it as correct.
 
   NOT VERIFIED AGAINST REAL HARDWARE: POSITIVE_PITCH_MEANS_FRONT_HIGH
   (near the top of this file) determines which physical direction
@@ -42,7 +50,9 @@
   mounting orientation inside the housing, which isn't visible from
   software. If FRONT/REAR guidance and bubble motion appear backwards
   together on a real unit, flip that one boolean -- text and bubble will
-  flip together, staying consistent with each other either way.
+  flip together, staying consistent with each other either way. This is
+  the one remaining thing to confirm on a physical unit before this
+  design should be considered fully validated.
 
   Confirmed by diff against v1.9: zero changes to Tare, Calibration,
   pitch computation, EMA smoothing, or any BLE handling. This is purely a
@@ -201,7 +211,7 @@ const CHAR_TX_UUID  = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 const CHAR_RX_UUID  = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 const EMA_ALPHA     = 0.05;
 const THRESHOLD_OPTIONS = [0.01, 0.05, 0.10];
-// TEST 1.0: FRONT/REAR guidance, mimicking a real mechanical bubble level.
+// PROTO 1.0: FRONT/REAR guidance, mimicking a real mechanical bubble level.
 // Pitch (atan2(ayf,azf), body-fixed) is always consistent relative to the
 // physical FRONT label, regardless of yaw rotation -- both the guidance
 // text AND the bubble's own visual motion are driven by this same signal,
@@ -646,7 +656,7 @@ function App() {
   const riseIn = Math.tan(Math.abs(displayPitch) * Math.PI / 180) * 120;
   const riseDir = displayPitch > 0 ? 'rise' : displayPitch < 0 ? 'drop' : 'level';
 
-  // TEST 1.0: FRONT/REAR guidance. Correct regardless of which way the
+  // PROTO 1.0: FRONT/REAR guidance. Correct regardless of which way the
   // unit is yawed, because the measurement (pitch), the instruction
   // (FRONT/REAR text), and the bubble's own screen position are ALL
   // driven by this same body-fixed signal -- see
@@ -670,7 +680,7 @@ function App() {
             ),
             h('div', null,
               h('h1', { className: 'text-sm font-semibold text-white leading-none' }, 'Digital Level Tradesman'),
-              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'TEST 1.0')
+              h('p', { className: 'text-xs text-slate-500 leading-none mt-0.5' }, 'Proto 1.0')
             )
           ),
           // Connection indicator
@@ -747,7 +757,7 @@ function App() {
             `${sign(displayPitch)}${displayPitch.toFixed(2)}°`
           ),
 
-          // TEST 1.0: FRONT/REAR guidance -- correct regardless of which
+          // PROTO 1.0: FRONT/REAR guidance -- correct regardless of which
           // way the unit is yawed on the surface. Match this label to the
           // physical FRONT marking on the unit; the instruction is
           // unambiguous either way.
@@ -765,7 +775,7 @@ function App() {
 
           // Bubble vial
           h('div', { className: 'pt-4 pb-1 px-1' },
-            // TEST 1.0: REAR on screen-left, FRONT on screen-right.
+            // PROTO 1.0: REAR on screen-left, FRONT on screen-right.
             // barPct maps positive pitch (FRONT high, per the constant
             // above) to a HIGHER percentage -- i.e. screen-right -- so
             // FRONT must be drawn on the right for the bubble to move
@@ -1042,7 +1052,7 @@ function App() {
         // ── Footer ──
         h('div', { className:'text-center text-xs text-slate-600 pt-2 pb-4 space-y-1' },
           h('p', null, 'Advertise as "Level" in your Arduino sketch'),
-          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · TEST 1.0')
+          h('p', { className:'text-slate-700 mt-2' }, '© Digital Level Tradesman · Proto 1.0')
         )
       )
     ),
